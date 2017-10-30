@@ -155,7 +155,7 @@ public class AnnotationProcess extends AbstractProcessor {
             }
             for (FieldSpec fieldSpec : fieldSpecs){
                 typeBuilder.addField(fieldSpec);
-            }git 
+            }
             if(typeBuilder!=null){
                 typeBuilder.addMethod(constructorBuilder.build());
                 JavaFile javaFile = JavaFile.builder(packageName, typeBuilder.build()).build();
