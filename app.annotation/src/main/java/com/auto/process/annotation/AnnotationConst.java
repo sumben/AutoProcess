@@ -6,4 +6,5 @@ package com.auto.process.annotation;
 
 public class AnnotationConst {
     public static final String POSTFIX = "$$ViewHolder";
+    public static final String FIELD_ACCESSOR = "accessField";
 }

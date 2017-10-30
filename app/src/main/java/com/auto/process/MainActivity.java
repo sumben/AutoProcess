@@ -4,12 +4,12 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.TextView;
 
-import com.auto.process.annotation.ExclusiveEvent;
+import com.auto.process.annotation.Exclusive;
 import com.auto.process.api.ViewProcessHelper;
 
 public class MainActivity extends AppCompatActivity {
 
-    @ExclusiveEvent(R.id.tv)
+    @Exclusive(R.id.tv)
     TextView textView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {

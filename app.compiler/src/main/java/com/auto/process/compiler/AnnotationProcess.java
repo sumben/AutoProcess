@@ -1,16 +1,20 @@
 package com.auto.process.compiler;
 
+import com.auto.process.annotation.ActivityModule;
 import com.auto.process.annotation.AnnotationConst;
-import com.auto.process.annotation.ExclusiveEvent;
+import com.auto.process.annotation.Exclusive;
+import com.auto.process.annotation.ViewModule;
+import com.google.auto.common.SuperficialValidation;
 import com.google.auto.service.AutoService;
+import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
-import java.io.IOException;
-import java.io.Writer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -21,8 +25,7 @@ import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
+import javax.annotation.processing.Processor;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -31,109 +34,137 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 
 /**
  * Created by Jack on 10/20/17.
  */
 
-@SupportedAnnotationTypes("com.auto.process.annotation.ExclusiveEvent")
-@SupportedSourceVersion(SourceVersion.RELEASE_7)
+@AutoService(Processor.class)
 public class AnnotationProcess extends AbstractProcessor {
     private Elements mElementUtils;
-    private Filer mJavaFiler;
-    private Messager mJavaMessager;
-    private HashMap<String, TypeElement> mTypeElements;
-    private HashMap<String, LinkedList<VariableInfo>> mVariableInfos;
+    private Filer mWriter;
+    private Messager mOutputMessager;
+    private HashMap<String,MetaData> metaDataMap;
 
-    /*@Override
+    @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> annotationTypes = new LinkedHashSet<>();
-        annotationTypes.add(ExclusiveEvent.class.getCanonicalName());
+        annotationTypes.add(Exclusive.class.getCanonicalName());
+        annotationTypes.add(ActivityModule.class.getCanonicalName());
+        annotationTypes.add(ViewModule.class.getCanonicalName());
         return annotationTypes;
     }
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latestSupported();
-    }*/
+    }
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
-        mJavaMessager = processingEnv.getMessager();
-        mJavaFiler = processingEnv.getFiler();
+        mOutputMessager = processingEnv.getMessager();
+        mWriter = processingEnv.getFiler();
         mElementUtils = processingEnv.getElementUtils();
 
-        mTypeElements = new HashMap<>();
-        mVariableInfos = new HashMap<>();
+        metaDataMap = new HashMap<>(10);
     }
 
     @Override
     public boolean process(Set<? extends TypeElement> set,
                            RoundEnvironment roundEnv) {
-        mJavaMessager.printMessage(Diagnostic.Kind.NOTE, "begin annotation process...");
-        mTypeElements.clear();
-        mVariableInfos.clear();
-        findAnnotationInfo(roundEnv);
+        mOutputMessager.printMessage(Diagnostic.Kind.NOTE,
+                "start compiler time annotation process...");
+        metaDataMap.clear();
+        findAndParserTarget(roundEnv);
         generateJavaFile();
-        //generateJavaFile2(set,roundEnv);
         return true;
     }
 
-    private void findAnnotationInfo(RoundEnvironment roundEnv) {
-        Set<? extends Element> elements
-                = roundEnv.getElementsAnnotatedWith(ExclusiveEvent.class);
-        for (Element ele : elements) {
-            if (ele.getKind() != ElementKind.FIELD) continue;
-            int viewId = ele.getAnnotation(ExclusiveEvent.class).value();
-            VariableElement vElement = (VariableElement) ele;
-            TypeElement tElement = (TypeElement) vElement.getEnclosingElement();
-            String fullClzName = tElement.getQualifiedName().toString();
-            LinkedList<VariableInfo> vInfoList = mVariableInfos.get(fullClzName);
-            if (vInfoList == null) {
-                vInfoList = new LinkedList<>();
-                mVariableInfos.put(fullClzName, vInfoList);
-                mTypeElements.put(fullClzName, tElement);
+    private void findAndParserTarget(RoundEnvironment roundEnv) {
+        Set<? extends Element> elementSet
+                = roundEnv.getElementsAnnotatedWith(Exclusive.class);
+        for (Element element : elementSet) {
+            if(!SuperficialValidation.validateElement(element)
+                    ||element.getKind() != ElementKind.FIELD){
+                continue;
             }
-            VariableInfo vInfo = new VariableInfo();
-            vInfo.viewId = viewId;
-            vInfo.variableElement = vElement;
-            vInfoList.add(vInfo);
+            int viewId = element.getAnnotation(Exclusive.class).value();
+            VariableElement vElement = (VariableElement) element;
+            TypeElement tElement = (TypeElement) vElement.getEnclosingElement();
+            String aClassName = tElement.getQualifiedName().toString();
+            MetaData metaData = metaDataMap.get(aClassName);
+            if(metaData==null){
+                metaData = new MetaData();
+                metaData.typeElement = tElement;
+            }
+
+            LinkedList<FieldResource> frList = metaData.fields;
+            if(frList==null){
+                frList = new LinkedList<>();
+            }
+
+            FieldResource fr = new FieldResource();
+            fr.resId = viewId;
+            fr.vEle = vElement;
+
+            frList.add(fr);
+            metaData.fields = frList;
+            metaDataMap.put(aClassName,metaData);
         }
     }
 
     private void generateJavaFile() {
         try {
-            for (String fullClzName : mTypeElements.keySet()) {
-                TypeElement tElement = mTypeElements.get(fullClzName);
-                MethodSpec.Builder constructor
-                        = MethodSpec.constructorBuilder()
-                        .addModifiers(Modifier.PUBLIC)
-                        .addParameter(ParameterSpec.builder(
-                                TypeName.get(tElement.asType()), "activity").build());
-                LinkedList<VariableInfo> infoList = mVariableInfos.get(fullClzName);
-                for (VariableInfo vInfo : infoList) {
-                    VariableElement vElement = vInfo.variableElement;
-                    String fieldName = vElement.getSimpleName().toString();
-                    String fieldFullType = vElement.asType().toString();
-                    constructor.addStatement("activity.$L=($L)activity.findViewById($L)", fieldName, fieldFullType, vInfo.viewId);
+            ArrayList<FieldSpec> fieldSpecs = new ArrayList<>(10);
+            TypeSpec.Builder typeBuilder = null;
+            String packageName = null;
+            MethodSpec.Builder constructorBuilder = null;
+            for (String aClassName : metaDataMap.keySet()) {
+                MetaData metaData = metaDataMap.get(aClassName);
+                TypeElement tElement = metaData.typeElement;
+                if(constructorBuilder==null){
+                    constructorBuilder = MethodSpec.constructorBuilder()
+                            .addModifiers(Modifier.PUBLIC)
+                            .addParameter(ParameterSpec.builder(
+                                    TypeName.get(tElement.asType()), "activity").build());
                 }
+                MethodSpec.Builder accessor
+                        = MethodSpec.methodBuilder(AnnotationConst.FIELD_ACCESSOR);
+                LinkedList<FieldResource> frList = metaData.fields;
+                for (FieldResource fr : frList) {
+                    VariableElement vElement = fr.vEle;
+                    String fieldName = vElement.getSimpleName().toString();
+                    String fieldType = vElement.asType().toString();
+                    constructorBuilder.addStatement("activity.$L=($L)activity.findViewById($L)", fieldName, fieldType, fr.resId);
 
-                String packageFullName = mElementUtils.getPackageOf(tElement)
-                        .getQualifiedName().toString();
-
-                TypeSpec typeSpec = TypeSpec.classBuilder(getClassName(tElement, packageFullName) + AnnotationConst.POSTFIX)
-                        .addModifiers(Modifier.PUBLIC)
-                        .addMethod(constructor.build())
-                        .build();
-
-                JavaFile javaFile = JavaFile.builder(packageFullName, typeSpec).build();
-                javaFile.writeTo(mJavaFiler);
-                //javaFile.writeTo(System.out);
+                    FieldSpec.Builder fieldBuilder
+                            = FieldSpec.builder(ClassName.get(vElement.asType()),fieldName)
+                                       .addModifiers(Modifier.PUBLIC);
+                    fieldSpecs.add(fieldBuilder.build());
+                }
+                if(packageName==null){
+                    packageName = mElementUtils.getPackageOf(tElement)
+                            .getQualifiedName().toString();
+                }
+                if(typeBuilder==null){
+                    typeBuilder = TypeSpec.classBuilder(
+                            getClassName(tElement, packageName) + AnnotationConst.POSTFIX)
+                            .addModifiers(Modifier.PUBLIC);
+                }
+            }
+            for (FieldSpec fieldSpec : fieldSpecs){
+                typeBuilder.addField(fieldSpec);
+            }git 
+            if(typeBuilder!=null){
+                typeBuilder.addMethod(constructorBuilder.build());
+                JavaFile javaFile = JavaFile.builder(packageName, typeBuilder.build()).build();
+                javaFile.writeTo(mWriter);
             }
         } catch (Exception ex) {
-            mJavaMessager.printMessage(Diagnostic.Kind.ERROR, "exception occur:" + ex.getMessage());
+            ex.printStackTrace();
+            mOutputMessager.printMessage(Diagnostic.Kind.ERROR,
+                    "exception occur:" + ex.getMessage());
         }
 
     }
@@ -148,40 +179,13 @@ public class AnnotationProcess extends AbstractProcessor {
         VariableElement variableElement;
     }
 
-    private void generateJavaFile2(Set<? extends TypeElement> set,
-                                   RoundEnvironment roundEnv) {
-        StringBuilder builder = new StringBuilder()
-                .append("package com.stablekernel.annotationprocessor.generated;\n")
-                .append("public class GeneratedClass {") // open class
-                .append("\t\tpublic String getMessage() {\n") // open method
-                .append("\treturn ");
+    private class MetaData{
+        TypeElement typeElement;
+        LinkedList<FieldResource> fields;
+    }
 
-
-        // for each javax.lang.model.element.Element annotated with the CustomAnnotation
-        for (Element element : roundEnv.getElementsAnnotatedWith(ExclusiveEvent.class)) {
-            String objectType = element.getSimpleName().toString();
-
-
-            // this is appending to the return statement
-            builder.append(objectType).append(" says hello!\n");
-        }
-
-
-        builder.append(";\n") // end return
-                .append("\t}\n") // close method
-                .append("}\n"); // close class
-
-
-        try { // write the file
-            JavaFileObject source = mJavaFiler.createSourceFile("com.annotation.compiler.GeneratedClass");
-            Writer writer = source.openWriter();
-            writer.write(builder.toString());
-            writer.flush();
-            writer.close();
-        } catch (IOException e) {
-            // Note: calling e.printStackTrace() will print IO errors
-            // that occur from the file already existing after its first run, this is normal
-        }
-
+    private class FieldResource{
+        int resId;
+        VariableElement vEle;
     }
 }
