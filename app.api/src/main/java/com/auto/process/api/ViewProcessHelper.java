@@ -12,7 +12,7 @@ import java.lang.reflect.InvocationTargetException;
 public class ViewProcessHelper{
 
     public static void bind(Object host){
-        String clzFullName = host.getClass().getName()+AnnotationConst.POSTFIX;
+        String clzFullName = host.getClass().getName()+AnnotationConst.CLASS_POSTFIX;
         try {
             Class<?> clz = Class.forName(clzFullName);
             Constructor<?> constructor = clz.getConstructor(host.getClass());
@@ -32,6 +32,10 @@ public class ViewProcessHelper{
 
 
     public void unbind(Object host) {
+
+    }
+
+    public static void hook(Object host){
 
     }
 }

@@ -33,5 +33,6 @@
     <orderEntry type="library" exported="" scope="PROVIDED" name="javapoet-1.9.0" level="project" />
     <orderEntry type="library" exported="" scope="PROVIDED" name="auto-common-0.3" level="project" />
     <orderEntry type="library" exported="" scope="PROVIDED" name="guava-18.0" level="project" />
+    <orderEntry type="library" exported="" scope="PROVIDED" name="gson-2.8.2" level="project" />
   </component>
 </module>
