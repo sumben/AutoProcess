@@ -1,5 +1,5 @@
 apply plugin: 'java-library'
-
+apply plugin: 'bintray-release'
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.google.code.gson:gson:2.8.2'
@@ -7,3 +7,14 @@ dependencies {
 
 sourceCompatibility = "1.7"
 targetCompatibility = "1.7"
+
+publish {
+    artifactId = 'app-annotation'
+    userOrg = rootProject.userOrg
+    groupId = rootProject.groupId
+    uploadName = rootProject.uploadName
+    publishVersion = rootProject.publishVersion
+    desc = rootProject.description
+    website = rootProject.website
+    licences = rootProject.licences
+}

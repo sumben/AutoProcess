@@ -1,5 +1,5 @@
 apply plugin: 'java-library'
-
+apply plugin: 'bintray-release'
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.google.auto.service:auto-service:1.0-rc2'
@@ -9,3 +9,15 @@ dependencies {
 
 sourceCompatibility = "1.7"
 targetCompatibility = "1.7"
+
+
+publish {
+    artifactId = 'app-compiler'
+    userOrg = rootProject.userOrg
+    groupId = rootProject.groupId
+    uploadName = rootProject.uploadName
+    publishVersion = rootProject.publishVersion
+    desc = rootProject.description
+    website = rootProject.website
+    licences = rootProject.licences
+}

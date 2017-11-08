@@ -1,5 +1,5 @@
 apply plugin: 'com.android.library'
-
+apply plugin: 'bintray-release'
 android {
     compileSdkVersion 26
     buildToolsVersion "26.0.2"
@@ -32,4 +32,15 @@ dependencies {
     androidTestImplementation 'com.android.support.test:runner:1.0.1'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
     compile project(':app.annotation')
+}
+
+publish {
+    artifactId = 'app-api'
+    userOrg = rootProject.userOrg
+    groupId = rootProject.groupId
+    uploadName = rootProject.uploadName
+    publishVersion = rootProject.publishVersion
+    desc = rootProject.description
+    website = rootProject.website
+    licences = rootProject.licences
 }
